@@ -136,15 +136,17 @@ function Create-ClickOnce {
 
     foreach ($f in $publishFiles) {
         $relativeFilePath = "$($f.FullName.SubString($parentFolder.Length+1))"
-        UploadTo-AmazonS3 $relativeFilePath `
-        -BucketName $bucketName `
+        UploadTo-AmazonS3 `
+		-RelativeFilePath $relativeFilePath `
+        -AmazonBucketName $bucketName `
         -AmazonRegion $amazonRegion
     }
 
     $realDeployManifestPath = [System.IO.Path]::GetFullPath($deployManifestPath)
     $relativeFilePath = "$($realDeployManifestPath.SubString($parentFolder.Length+1))"
-    UploadTo-AmazonS3 $relativeFilePath `
-        -BucketName $bucketName `
+    UploadTo-AmazonS3 `
+	    -RelativeFilePath $relativeFilePath `
+        -AmazonBucketName $bucketName `
         -AmazonRegion $amazonRegion
     
 
