@@ -1,4 +1,5 @@
-﻿Import-Module .\AmazonS3-Module.ps1
+﻿Import-Module AWSPowerShell
+Import-Module .\AmazonS3-Module.ps1
 Import-Module .\ClickOnce-Module.ps1
 
 #Build project
