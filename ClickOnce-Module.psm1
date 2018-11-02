@@ -20,12 +20,12 @@ function Create-ClickOnce {
     $version = "1.0.0.$revision"
     "Deploying as version: $version"
 
-	"Moving to binary release folder..."
-	pushd .\
-	cd ".\bin\Release"
-	
-	$currentFolder = Get-Location
-	"Current Folder: $currentFolder"
+    "Moving to binary release folder..."
+    pushd .\
+    cd ".\bin\Release"
+    
+    $currentFolder = Get-Location
+    "Current Folder: $currentFolder"
 
     # The first file is the "Entry Point" file, the main .exe.
     $files = $args[0] 
@@ -68,22 +68,24 @@ function Create-ClickOnce {
         -Name $appProperName `
         -Version $version `
         -Processor $processor `
-        -CertFile "$certFile" `
         -FromDirectory $versionDir `
         -TrustLevel FullTrust `
         -Algorithm $algorithm `
         -IconFile $iconFilename
 
-	"Adding file association to ClickOnce Manifest $deployManifestPath ... "
-	[xml]$doc = Get-Content $deployManifestPath
-	$fa = $doc.CreateElement("fileAssociation")
-	$fa.SetAttribute("xmlns", "urn:schemas-microsoft-com:clickonce.v1")
-	$fa.SetAttribute("extension", "$fileExtension")
-	$fa.SetAttribute("description", "$fileExtensionDescription")
-	$fa.SetAttribute("progid", "$fileExtensionProgId")
-	$fa.SetAttribute("defaultIcon", "$iconFilename")
-	$doc.assembly.AppendChild($fa)
-	$doc.Save((Resolve-Path "$deployManifestPath"))
+    "Adding file association to application manifest file ... "
+    [xml]$doc = Get-Content (Resolve-Path "$appManifestPath")
+    $fa = $doc.CreateElement("fileAssociation")
+    $fa.SetAttribute("xmlns", "urn:schemas-microsoft-com:clickonce.v1")
+    $fa.SetAttribute("extension", "$fileExtension")
+    $fa.SetAttribute("description", "$fileExtensionDescription")
+    $fa.SetAttribute("progid", "$fileExtensionProgId")
+    $fa.SetAttribute("defaultIcon", "$iconFilename")
+    $doc.assembly.AppendChild($fa)
+    $doc.Save((Resolve-Path "$appManifestPath"))
+
+    mage -Sign "$appManifestPath" `
+        -CertFile "$certFile"
 
     "Generating deployment manifest file: $deployManifestPath"
     mage -New Deployment `
@@ -149,10 +151,10 @@ function Create-ClickOnce {
     "ClickOnce deployment created."
     "Uploading files to Amazon Web Services S3..."
     
-	"Moving to Output Folder..."
+    "Moving to Output Folder..."
     cd $outputDir
-	$currentFolder = Get-Location
-	"Current Director: $currentFolder"
+    $currentFolder = Get-Location
+    "Current Director: $currentFolder"
 
     $publishFiles = dir $versionDir -Recurse -File
 
@@ -161,7 +163,7 @@ function Create-ClickOnce {
     foreach ($f in $publishFiles) {
         $relativeFilePath = "$($f.FullName.SubString($parentFolder.Length+1))"
         UploadTo-AmazonS3 `
-		-RelativeFilePath $relativeFilePath `
+        -RelativeFilePath $relativeFilePath `
         -AmazonBucketName $bucketName `
         -AmazonRegion $amazonRegion
     }
@@ -169,20 +171,20 @@ function Create-ClickOnce {
     $realDeployManifestPath = [System.IO.Path]::GetFullPath($deployManifestPath)
     $relativeFilePath = "$($realDeployManifestPath.SubString($parentFolder.Length+1))"
     UploadTo-AmazonS3 `
-	    -RelativeFilePath $relativeFilePath `
+        -RelativeFilePath $relativeFilePath `
         -AmazonBucketName $bucketName `
         -AmazonRegion $amazonRegion
-		
-	$here = Get-Location
-	"Current Directory: $here"
-	
-	"Moving back to project folder..."
-	popd
-	$currentFolder = Get-Location
-	"Current Directory: $currentFolder"
-	
-	"Saving Current Revision $revision to Revision.txt file..."
-	Set-Content -Value "$revision" -Path "./Revision.txt" -Encoding UTF8
-	"Done."
+        
+    $here = Get-Location
+    "Current Directory: $here"
+    
+    "Moving back to project folder..."
+    popd
+    $currentFolder = Get-Location
+    "Current Directory: $currentFolder"
+    
+    "Saving Current Revision $revision to Revision.txt file..."
+    Set-Content -Value "$revision" -Path "./Revision.txt" -Encoding UTF8
+    "Done."
 }
 
