@@ -7,7 +7,10 @@ function Create-ClickOnce {
         $certFile, `
         $deploymentUrl, `
         $bucketName, `
-        $amazonRegion) 
+        $amazonRegion, `
+        $fileExtensionsion, `
+        $fileExtensionDescription, `
+        $fileExtensionProgId) 
 
     "Creating ClickOnce deployment for $appProperName..."
 
@@ -70,7 +73,18 @@ function Create-ClickOnce {
         -TrustLevel FullTrust `
         -Algorithm $algorithm `
         -IconFile $iconFilename
-    
+
+	"Adding file association to ClickOnce Manifest $deployManifestPath ... "
+	[xml]$doc = Get-Content $deployManifestPath
+	$fa = $doc.CreateElement("fileAssociation")
+	$fa.SetAttribute("xmlns", "urn:schemas-microsoft-com:clickonce.v1")
+	$fa.SetAttribute("extension", "$fileExtension")
+	$fa.SetAttribute("description", "$fileExtensionDescription")
+	$fa.SetAttribute("progid", "$fileExtensionProgId")
+	$fa.SetAttribute("defaultIcon", "$iconFilename")
+	$doc.assembly.AppendChild($fa)
+	$doc.Save((Resolve-Path "$deployManifestPath"))
+
     "Generating deployment manifest file: $deployManifestPath"
     mage -New Deployment `
         -ToFile "$deployManifestPath" `
