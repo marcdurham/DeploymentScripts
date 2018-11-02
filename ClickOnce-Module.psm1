@@ -8,7 +8,7 @@ function Create-ClickOnce {
         $deploymentUrl, `
         $bucketName, `
         $amazonRegion, `
-        $fileExtensionsion, `
+        $fileExtension, `
         $fileExtensionDescription, `
         $fileExtensionProgId) 
 
