@@ -21,17 +21,20 @@ function Publish-ClickOnce {
         $FileExtension, `
         $FileExtDescription, `
         $FileExtProgId, `
-        $VersionPrefix = "1.0.0.",
-        $Processor = "MSIL") 
+        $VersionPrefix = "1.0.0.", `
+        $Processor = "MSIL", `
+		$BinaryReleaseFolder = ".\bin\Release", `
+		$ProjectFolder = ".\", `
+		$MinVersion = "none") 
 
     Write-Host "Creating ClickOnce deployment for $AppLongName..."
 
     Write-Host "Changing current directory to binary release folder..."
     pushd .\
-    cd ".\bin\Release"
+    cd $BinaryReleaseFolder
 
     $missing = 0
-    Write-Host "Peparing $($Files.Count) files for deployment:"
+    Write-Host "Peparing $($Files.Count) files for publishing:"
     foreach ($f in $Files) {
         Write-Host "    $f" -NoNewline
         if (Test-Path $f) {
@@ -60,15 +63,16 @@ function Publish-ClickOnce {
     
     $appManifest = "$AppShortName.exe.manifest"
     $deployManifest = "$AppShortName.application"
-
     $signingAlgorithm = "sha256RSA"
 
-    $projectFolder = "$($(Get-Location).Path)"
-    $OutputFolder = (Resolve-Path "$projectFolder/$OutputFolder")
+	if ($ProjectFolder -eq ".\")
+		$ProjectFolder = "$($(Get-Location).Path)"
+
+    $OutputFolder = (Resolve-Path "$ProjectFolder/$OutputFolder")
     $releaseRelativePath = "Application Files/$AppShortName" + "_$($version.Replace(".", "_"))"
     $releaseFolder = "$OutputFolder/$releaseRelativePath"
     
-    Write-Host "Project Folder: $projectFolder"
+    Write-Host "Project Folder: $ProjectFolder"
     Write-Host "Output Folder: $OutputFolder"
     Write-Host "Release Folder: $releaseFolder"
 
@@ -78,7 +82,7 @@ function Publish-ClickOnce {
     $releaseDeployManifestPath = "$releaseFolder/$deployManifest"
     $releaseDeployUrl = "$DeploymentRootUrl/$releaseRelativePath/$deployManifest"
 
-    Write-Host "Appliction Manifest Path: $appManifestPath"
+    Write-Host "Application Manifest Path: $appManifestPath"
     Write-Host "Root Deployment Manifest Path: $rootDeployManifestPath"
     Write-Host "Release Deployment Manifest Path: $releaseDeployManifestPath"
     
@@ -96,10 +100,10 @@ function Publish-ClickOnce {
          Write-Host "    Output folder does not already exist.  Continue."
     }
 
-    Write-Host "Creating output folders..."
+    Write-Host "Creating release folder..."
     New-Item $releaseFolder -ItemType directory | Out-Null
  
-    Write-Host "Copying files into the output folder..."
+    Write-Host "Copying files into the release folder..."
     Copy-Item $Files -Destination $releaseFolder
     
     Write-Host "Generating application manifest file: $appManifestPath"
@@ -113,43 +117,42 @@ function Publish-ClickOnce {
         -Algorithm $signingAlgorithm `
         -IconFile $IconFile | Out-Host
 
-    Write-Host "Adding file association to application manifest file ... "
-    [xml]$doc = Get-Content (Resolve-Path "$appManifestPath")
-    $fa = $doc.CreateElement("fileAssociation")
-    $fa.SetAttribute("xmlns", "urn:schemas-microsoft-com:clickonce.v1")
-    $fa.SetAttribute("extension", "$FileExtension")
-    $fa.SetAttribute("description", "$FileExtDescription")
-    $fa.SetAttribute("progid", "$FileExtProgId")
-    $fa.SetAttribute("defaultIcon", "$IconFile")
-    $doc.assembly.AppendChild($fa) | Out-Null
-    $doc.Save((Resolve-Path "$appManifestPath"))
+    Write-Host "Adding file association to (unsigned) application manifest file ... "
+    [xml]$appManifestXml = Get-Content (Resolve-Path "$appManifestPath")
+    $association = $appManifestXml.CreateElement("fileAssociation")
+    $association.SetAttribute("xmlns", "urn:schemas-microsoft-com:clickonce.v1")
+    $association.SetAttribute("extension", "$FileExtension")
+    $association.SetAttribute("description", "$FileExtDescription")
+    $association.SetAttribute("progid", "$FileExtProgId")
+    $association.SetAttribute("defaultIcon", "$IconFile")
+    $appManifestXml.assembly.AppendChild($association) | Out-Null
+    $appManifestXml.Save((Resolve-Path "$appManifestPath"))
 
-    mage -Sign "$appManifestPath" `
-        -CertFile "$CertFile" | Out-Host
+    #mage -Sign "$appManifestPath" `
+    #    -CertFile "$CertFile" | Out-Host
 
-    Write-Host "Generating deployment manifest file: $rootDeployManifestPath"
+    Write-Host "Generating root deployment manifest file: $rootDeployManifestPath"
     mage -New Deployment `
         -ToFile "$rootDeployManifestPath" `
         -Name $AppLongName `
         -Version $version `
-        -MinVersion none `
+        -MinVersion $MinVersion `
         -Processor $Processor `
         -AppManifest "$appManifestPath" `
         -AppCodeBase "$($appCodeBasePath.Replace(" ", "%20"))" `
-        -CertFile $CertFile `
         -IncludeProviderURL true `
         -ProviderURL "$DeploymentRootUrl/$deployManifest" `
         -Install true `
         -Publisher $Publisher `
         -Algorithm $signingAlgorithm | Out-Host
 
-    Write-Host "Renaming files for web server deployment with .deploy..."
+    Write-Host "Renaming files for web deployment, append .deploy..."
     Get-ChildItem $releaseFolder | `
         Foreach-Object { `
             if (-not $_.FullName.EndsWith(".manifest")) { `
                 Rename-Item $_.FullName "$($_.FullName).deploy" } } 
 
-    Write-Host "Resigning application manifest..."
+    Write-Host "Signing application manifest..."
     mage -Sign "$appManifestPath" -CertFile $CertFile | Out-Host
     
     Write-Host "Altering inner  deployment manifest details..."
@@ -168,24 +171,24 @@ function Publish-ClickOnce {
     $expirationNode.SetAttribute("maximumAge", "1")
     $expirationNode.SetAttribute("unit", "days")
     
-    Write-Host "Saving altered inner deployment manifest..."
+    Write-Host "Saving root deployment manifest changes..."
     $xml.Save("$rootDeployManifestPath")
 
-    Write-Host "Signing altered inner deployment manifest..."
-    mage -Sign "$rootDeployManifestPath" `
-        -CertFile $CertFile | Out-Host
-
-    Write-Host "Loading deployment manifest to make root copy..."
-    $secondXml = [xml](Get-Content "$rootDeployManifestPath")
+    Write-Host "Copying root deployment manifest to release deployment manifest.."
+    $releaseDeployManifestXml = [xml](Get-Content "$rootDeployManifestPath")
 
     Write-Host "Altering root deployment manifest..."
-    $deploymentProviderNode = $secondXml.SelectSingleNode("//*[local-name() = 'deploymentProvider']")
+    $deploymentProviderNode = $releaseDeployManifestXml.SelectSingleNode("//*[local-name() = 'deploymentProvider']")
     $deploymentProviderNode.SetAttribute("codebase", "$($secondDeployUrl.Replace(" ", "%20"))")
 
     Write-Host "Saving altered root deployment manifest..."
-    $secondXml.Save("$releaseDeployManifestPath")
+    $releaseDeployManifestXml.Save("$releaseDeployManifestPath")
 
-    Write-Host "Signing altered root deployment manifest..."
+    Write-Host "Signing root deployment manifest..."
+    mage -Sign "$rootDeployManifestPath" `
+        -CertFile $CertFile | Out-Host
+
+    Write-Host "Signing release deployment manifest..."
     mage -Sign "$releaseDeployManifestPath" `
         -CertFile $CertFile | Out-Host
 
