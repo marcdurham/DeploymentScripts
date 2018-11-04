@@ -1,4 +1,4 @@
-function Create-ClickOnce {
+function Publish-ClickOnce {
     param(
         [Parameter(Mandatory)]
         $Files, `
@@ -23,7 +23,7 @@ function Create-ClickOnce {
         $AmazonCannedACLName = "public-read", `
         [Parameter(Mandatory)]
         $AmazonRegion, `
-        $FileExt, `
+        $FileExtension, `
         $FileExtDescription, `
         $FileExtProgId) 
 
@@ -84,11 +84,11 @@ function Create-ClickOnce {
             return
         }
     } else {
-        Write-Verbose "    Output folder does not already exist.  Continue."
+         Write-Verbose "    Output folder does not already exist.  Continue."
     }
 
     Write-Verbose "Creating output folders..."
-    mkdir $versionDir
+    New-Item $versionDir -ItemType directory | Out-Null
  
     Write-Verbose "Copying files into the output folder..."
     Copy-Item $Files -Destination $versionDir
@@ -108,11 +108,11 @@ function Create-ClickOnce {
     [xml]$doc = Get-Content (Resolve-Path "$appManifestPath")
     $fa = $doc.CreateElement("fileAssociation")
     $fa.SetAttribute("xmlns", "urn:schemas-microsoft-com:clickonce.v1")
-    $fa.SetAttribute("extension", "$FileExt")
+    $fa.SetAttribute("extension", "$FileExtension")
     $fa.SetAttribute("description", "$FileExtDescription")
     $fa.SetAttribute("progid", "$FileExtProgId")
     $fa.SetAttribute("defaultIcon", "$IconFile")
-    $doc.assembly.AppendChild($fa)
+    $doc.assembly.AppendChild($fa) | Out-Null
     $doc.Save((Resolve-Path "$appManifestPath"))
 
     mage -Sign "$appManifestPath" `
@@ -142,7 +142,7 @@ function Create-ClickOnce {
 
     Write-Verbose "Resigning application manifest..."
     mage -Sign "$appManifestPath" -CertFile $CertFile | Out-Null
- 
+    
     Write-Verbose "Altering deployment manifest details..."
     $xml = [xml](Get-Content "$deployManifestPath")
     
@@ -189,15 +189,13 @@ function Create-ClickOnce {
 
     $publishFiles = dir $versionDir -Recurse -File
 
-    Write-Verbose "DIR WORKED"
-
     $parentFolder = [System.IO.Path]::GetFullPath("$OutputDir")
 
     [System.Collections.ArrayList]$relativeFilePaths = @()
     foreach ($f in $publishFiles) {
         $relativeFilePath = "$($f.FullName.SubString($parentFolder.Length+1))"
         Write-Verbose "$relativeFilePath"
-        $relativeFilePaths.Add($relativeFilePath)
+        $relativeFilePaths.Add($relativeFilePath) | Out-Null
         #Write-S3Object `
         #    -BucketName $AmazonS3BucketName `
         #    -Region $AmazonRegion `
@@ -210,7 +208,7 @@ function Create-ClickOnce {
     $realDeployManifestPath = [System.IO.Path]::GetFullPath($deployManifestPath)
     $relativeFilePath = "$($realDeployManifestPath.SubString($parentFolder.Length+1))"
     Write-Verbose "$relativeFilePath"
-    $relativeFilePaths.Add($relativeFilePath)
+    $relativeFilePaths.Add($relativeFilePath) | Out-Null
    # Write-S3Object `
    #     -BucketName $AmazonS3BucketName `
    #     -Region $AmazonRegion `
