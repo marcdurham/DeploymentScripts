@@ -28,6 +28,12 @@ function Publish-ClickOnce {
         $MinVersion = "none") 
 
     Write-Host "Creating ClickOnce deployment for $AppLongName..."
+    
+    if ($ProjectFolder -eq ".\") {
+        $ProjectFolder = "$($(Get-Location).Path)"
+    }
+
+    Write-Host "Project Folder: $ProjectFolder"
 
     Write-Host "Preparing files to be published..." -ForegroundColor Green
     Write-Host "Changing current directory to binary release folder..."
@@ -55,10 +61,10 @@ function Publish-ClickOnce {
     Write-Host "Entry Point: $($Files[0])"
 
     Write-Host "Getting last revision from Revision.txt..."
-    $revisionString = Get-Content "../../Revision.txt"
+    $revisionString = Get-Content "$ProjectFolder/Revision.txt"
     $revision = [Int32]::Parse($revisionString) + 1
     $version = "$VersionPrefix$revision"
-    Write-Host "Deploying as version: $version"
+    Write-Host "Publishing as version: $version"
     
     Write-Host "Current Folder: $(Get-Location)"
     
@@ -66,15 +72,10 @@ function Publish-ClickOnce {
     $deployManifest = "$AppShortName.application"
     $signingAlgorithm = "sha256RSA"
 
-    if ($ProjectFolder -eq ".\") {
-        $ProjectFolder = "$($(Get-Location).Path)"
-    }
-
     $OutputFolder = (Resolve-Path "$ProjectFolder/$OutputFolder")
     $releaseRelativePath = "Application Files/$AppShortName" + "_$($version.Replace(".", "_"))"
     $releaseFolder = "$OutputFolder/$releaseRelativePath"
     
-    Write-Host "Project Folder: $ProjectFolder"
     Write-Host "Output Folder: $OutputFolder"
     Write-Host "Release Folder: $releaseFolder"
 
@@ -209,8 +210,8 @@ function Publish-ClickOnce {
     $relativeFilePath = "$($realDeployManifestPath.SubString($parentFolder.Length+1))"
     $relativeFilePaths.Add($relativeFilePath) | Out-Null
     
-    Write-Host "Saving just published revision $revision to Revision.txt file..."
-    Set-Content -Value "$revision" -Path "$projectDir/Revision.txt" -Encoding UTF8
+    Write-Host "Saving just published revision $revision to revision file: $ProjectFolder/Revision.txt..."
+    Set-Content -Value "$revision" -Path "$ProjectFolder/Revision.txt" -Encoding UTF8
     
     Write-Host "The ClickOnce publish was successful." -ForegroundColor Green
     Write-Host "You may need to upload the files to a web server.  See Deploy.Example.ps1"
