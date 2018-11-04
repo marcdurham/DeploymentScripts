@@ -21,7 +21,7 @@ function Publish-ClickOnce {
         $FileExtension, `
         $FileExtDescription, `
         $FileExtProgId, `
-        $VersionPrefix = "1.0.0.", `
+        $Version = "0", `
         $Processor = "MSIL", `
         $BinaryReleaseFolder = ".\bin\Release", `
         $ProjectFolder = ".\", `
@@ -60,11 +60,30 @@ function Publish-ClickOnce {
     Write-Host "The first file, at index 0, will be the ""Entry Point"" file, or the main .exe."
     Write-Host "Entry Point: $($Files[0])"
 
-    Write-Host "Getting last revision from Revision.txt..."
-    $revisionString = Get-Content "$ProjectFolder/Revision.txt"
-    $revision = [Int32]::Parse($revisionString) + 1
-    $version = "$VersionPrefix$revision"
-    Write-Host "Publishing as version: $version"
+    if ($Version -eq "0") {
+        $versionFile =  "$ProjectFolder/Version.txt"
+        Write-Host "Getting last version from $versionFile..."
+        if (Test-Path $versionFile) {
+            $versionContent = Get-Content $versionFile
+            if ($versionContent.Contains(".")) {
+                $lastVersionDot = $versionContent.LastIndexOf(".")
+                $revisionString = $versionContent.SubString($lastVersionDot+1)
+                $revision = [Int32]::Parse($revisionString) + 1
+                $lastVersionPrefix = $versionContent.SubString(0, $lastVersionDot)
+                $Version = "$lastVersionPrefix.$revision"
+            } else {
+                Write-Host "ERROR! Bad version file: $versionFile" -ForegroundColor Red
+                Write-Host "The version file should contain a single line of text in the format 1.2.3.4" -ForegroundColor Red
+                Write-Host "Version File Content: $versionContent" -ForegroundColor Yellow
+                return
+            }
+        } else {
+            $Version = "1.0.0.0"
+            Write-Host "No version file exists or was supplied.  Using default version $Version" -ForegroundColor Yellow
+        }
+    }
+
+    Write-Host "Publishing as version: $Version"
     
     Write-Host "Current Folder: $(Get-Location)"
     
@@ -73,7 +92,7 @@ function Publish-ClickOnce {
     $signingAlgorithm = "sha256RSA"
 
     $OutputFolder = (Resolve-Path "$ProjectFolder/$OutputFolder")
-    $releaseRelativePath = "Application Files/$AppShortName" + "_$($version.Replace(".", "_"))"
+    $releaseRelativePath = "Application Files/$AppShortName" + "_$($Version.Replace(".", "_"))"
     $releaseFolder = "$OutputFolder/$releaseRelativePath"
     
     Write-Host "Output Folder: $OutputFolder"
@@ -91,12 +110,12 @@ function Publish-ClickOnce {
     
     Write-Host "Checking if output folder already exists..."
     if (Get-Item $releaseFolder -ErrorAction  SilentlyContinue) {
-        Write-Host "    Output folder already exists."
+        Write-Host "    Output folder already exists." -ForegroundColor Red
         if ($DeleteOutputFolder) {
             Write-Host "    Deleting existing output folder..."
             Remove-Item -Recurse $releaseFolder
         } else {
-            Write-Host "    Include the -DeleteOutputDir parameter to automatically delete an existing output folder with the same name."
+            Write-Host "    Include the (dangerous) -DeleteOutputFolder parameter to automatically delete an existing output folder with the same name." -ForegroundColor Yellow
             return
         }
     } else {
@@ -115,7 +134,7 @@ function Publish-ClickOnce {
     mage -New Application `
         -ToFile $appManifestPath `
         -Name $AppLongName `
-        -Version $version `
+        -Version $Version `
         -Processor $Processor `
         -FromDirectory $releaseFolder `
         -TrustLevel FullTrust `
@@ -142,7 +161,7 @@ function Publish-ClickOnce {
     mage -New Deployment `
         -ToFile $rootDeployManifestPath `
         -Name $AppLongName `
-        -Version $version `
+        -Version $Version `
         -MinVersion $MinVersion `
         -Processor $Processor `
         -AppManifest $appManifestPath `
@@ -210,8 +229,8 @@ function Publish-ClickOnce {
     $relativeFilePath = "$($realDeployManifestPath.SubString($parentFolder.Length+1))"
     $relativeFilePaths.Add($relativeFilePath) | Out-Null
     
-    Write-Host "Saving just published revision $revision to revision file: $ProjectFolder/Revision.txt..."
-    Set-Content -Value "$revision" -Path "$ProjectFolder/Revision.txt" -Encoding UTF8
+    Write-Host "Saving just published version $Version to version file: $ProjectFolder/Version.txt..."
+    Set-Content -Value "$Version" -Path "$ProjectFolder/Version.txt" -Encoding UTF8
     
     Write-Host "The ClickOnce publish was successful." -ForegroundColor Green
     Write-Host "You may need to upload the files to a web server.  See Deploy.Example.ps1"
