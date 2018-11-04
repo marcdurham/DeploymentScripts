@@ -12,6 +12,8 @@ function Create-ClickOnce {
         $Publisher, `
         [Parameter(Mandatory)]
         $OutputDir, `
+        [switch]
+		$DeleteOutputDir, `
         [Parameter(Mandatory)]
         $CertFile, `
         [Parameter(Mandatory)]
@@ -25,26 +27,26 @@ function Create-ClickOnce {
         $FileExtDescription, `
         $FileExtProgId) 
 
-    "Creating ClickOnce deployment for $AppLongName..."
+    Write-Verbose "Creating ClickOnce deployment for $AppLongName..."
 
-    "Peparing $($Files.Count) Files to Deploy:"
+    Write-Verbose "Peparing $($Files.Count) Files to Deploy:"
     foreach ($f in $Files) {
-        "    $f"
+        Write-Verbose "    $f"
     }
 
-    "The first file, at index 0, will be the ""Entry Point"" file, or the main .exe."
+    Write-Verbose "The first file, at index 0, will be the ""Entry Point"" file, or the main .exe."
 
-    "Getting last revision from Revision.txt..."
+    Write-Verbose "Getting last revision from Revision.txt..."
     $revisionString = Get-Content "./Revision.txt"
     $revision = [Int32]::Parse($revisionString) + 1
     $version = "1.0.0.$revision"
-    "Deploying as version: $version"
+    Write-Verbose "Deploying as version: $version"
 
-    "Moving to binary release folder..."
+    Write-Verbose "Moving to binary release folder..."
     pushd .\
     cd ".\bin\Release"
     
-    "Current Folder: $(Get-Location)"
+    Write-Verbose "Current Folder: $(Get-Location)"
     
     # TODO: Use these two variables, or delete them
     $appManifest = "$AppShortName.exe.manifest"
@@ -58,9 +60,9 @@ function Create-ClickOnce {
     $relativeVersionDir = "Application Files/$AppShortName" + "_$($version.Replace(".", "_"))"
     $versionDir = "$OutputDir/$relativeVersionDir"
     
-    "Project Dir: $projectDir"
-    "Output Dir: $OutputDir"
-    "Version Dir: $versionDir"
+    Write-Verbose "Project Dir: $projectDir"
+    Write-Verbose "Output Dir: $OutputDir"
+    Write-Verbose "Version Dir: $versionDir"
 
     $appCodeBasePath = "$relativeVersionDir/$appManifest"
     $appManifestPath = "$versionDir/$appManifest"
@@ -68,17 +70,31 @@ function Create-ClickOnce {
     $secondDeployManifestPath = "$versionDir/$deployManifest"
     $secondDeployUrl = "$DeploymentRootUrl/$relativeVersionDir/$deployManifest"
 
-    "Appliction Manifest Path: $appManifestPath"
-    "Deployment Manifest Path: $deployManifestPath"
-    "Second Deployment Manifest Path: $secondDeployManifestPath"
+    Write-Verbose "Appliction Manifest Path: $appManifestPath"
+    Write-Verbose "Deployment Manifest Path: $deployManifestPath"
+    Write-Verbose "Second Deployment Manifest Path: $secondDeployManifestPath"
     
-    "Creating output folders..."
+	Write-Verbose "Checking if output folder already exists..."
+	if (Get-Item $versionDir -ErrorAction  SilentlyContinue) {
+	    Write-Verbose "    Output folder already exists."
+	    if ($DeleteOutputDir) {
+		    Write-Verbose "    Deleting existing output folder..."
+		    Remove-Item -Recurse $versionDir
+		} else {
+			Write-Verbose "    Include the -DeleteOutputDir parameter to automatically delete an existing output folder with the same name."
+			return
+		}
+	} else {
+		Write-Verbose "    Output folder does not already exist.  Continue."
+	}
+
+    Write-Verbose "Creating output folders..."
     mkdir $versionDir
  
-    "Copying files into the output folder..."
+    Write-Verbose "Copying files into the output folder..."
     Copy-Item $Files -Destination $versionDir
     
-    "Generating application manifest file: $appManifestPath"
+    Write-Verbose "Generating application manifest file: $appManifestPath"
     mage -New Application `
         -ToFile "$appManifestPath" `
         -Name $AppLongName `
@@ -89,7 +105,7 @@ function Create-ClickOnce {
         -Algorithm $algorithm `
         -IconFile $IconFile
 
-    "Adding file association to application manifest file ... "
+    Write-Verbose "Adding file association to application manifest file ... "
     [xml]$doc = Get-Content (Resolve-Path "$appManifestPath")
     $fa = $doc.CreateElement("fileAssociation")
     $fa.SetAttribute("xmlns", "urn:schemas-microsoft-com:clickonce.v1")
@@ -103,7 +119,7 @@ function Create-ClickOnce {
     mage -Sign "$appManifestPath" `
         -CertFile "$CertFile"
 
-    "Generating deployment manifest file: $deployManifestPath"
+    Write-Verbose "Generating deployment manifest file: $deployManifestPath"
     mage -New Deployment `
         -ToFile "$deployManifestPath" `
         -Name $AppLongName `
@@ -119,17 +135,16 @@ function Create-ClickOnce {
         -Publisher $Publisher `
         -Algorithm $algorithm 
 
-    #-ProviderURL "$DeploymentRootUrl/$deployManifest" `
-    "Renaming files for web server deployment with .deploy..."
+    Write-Verbose "Renaming files for web server deployment with .deploy..."
     Get-ChildItem $versionDir | `
         Foreach-Object { `
             if (-not $_.FullName.EndsWith(".manifest")) { `
                 Rename-Item $_.FullName "$($_.FullName).deploy" } } 
 
-    "Resigning application manifest..."
+    Write-Verbose "Resigning application manifest..."
     mage -Sign "$appManifestPath" -CertFile $CertFile 
  
-    "Altering deployment manifest details..."
+    Write-Verbose "Altering deployment manifest details..."
     $xml = [xml](Get-Content "$deployManifestPath")
     
     #Change application identiy name
@@ -145,41 +160,43 @@ function Create-ClickOnce {
     $expirationNode.SetAttribute("maximumAge", "1")
     $expirationNode.SetAttribute("unit", "days")
     
-    "Saving first altered deployment manifest..."
+    Write-Verbose "Saving first altered deployment manifest..."
     $xml.Save("$deployManifestPath")
 
-    "Signing first altered deployment manifest..."
+    Write-Verbose "Signing first altered deployment manifest..."
     mage -Sign "$deployManifestPath" -CertFile $CertFile 
 
-    "Loading deployment manifest to make second copy..."
+    Write-Verbose "Loading deployment manifest to make second copy..."
     $secondXml = [xml](Get-Content "$deployManifestPath")
 
-    "Altering second manifest..."
+    Write-Verbose "Altering second manifest..."
     $deploymentProviderNode = $secondXml.SelectSingleNode("//*[local-name() = 'deploymentProvider']")
     $deploymentProviderNode.SetAttribute("codebase", "$($secondDeployUrl.Replace(" ", "%20"))")
 
-    "Saving second altered deployment manifest..."
+    Write-Verbose "Saving second altered deployment manifest..."
     $secondXml.Save("$secondDeployManifestPath")
 
-    "Signing second altered deployment manifest..."
+    Write-Verbose "Signing second altered deployment manifest..."
     mage -Sign "$secondDeployManifestPath" -CertFile $CertFile 
 
-    "ClickOnce deployment created."
-    "Uploading files to Amazon Web Services S3..."
+    Write-Verbose "ClickOnce deployment created."
+    Write-Verbose "Uploading files to Amazon Web Services S3..."
     
-    "Moving to Output Folder..."
+    Write-Verbose "Moving to Output Folder..."
     cd $OutputDir
-    $currentFolder = Get-Location
-    "Current Folder: $currentFolder"
+    Write-Verbose "Current Folder: $(Get-Location)"
 
     $publishFiles = dir $versionDir -Recurse -File
 
+	Write-Verbose "DIR WORKED"
+
     $parentFolder = [System.IO.Path]::GetFullPath("$OutputDir")
 
-    #[System.Collections.ArrayList]$relativeFilePaths
+    [System.Collections.ArrayList]$relativeFilePaths = @()
     foreach ($f in $publishFiles) {
         $relativeFilePath = "$($f.FullName.SubString($parentFolder.Length+1))"
-        "$relativeFilePath"
+        Write-Verbose "$relativeFilePath"
+        $relativeFilePaths.Add($relativeFilePath)
         #Write-S3Object `
         #    -BucketName $AmazonS3BucketName `
         #    -Region $AmazonRegion `
@@ -188,9 +205,11 @@ function Create-ClickOnce {
         #    -CannedACLName $AmazonCannedACLName
     }
 
+	Write-Verbose "Last File:"
     $realDeployManifestPath = [System.IO.Path]::GetFullPath($deployManifestPath)
     $relativeFilePath = "$($realDeployManifestPath.SubString($parentFolder.Length+1))"
-    "$relativeFilePath"
+     Write-Verbose "$relativeFilePath"
+    $relativeFilePaths.Add($relativeFilePath)
    # Write-S3Object `
    #     -BucketName $AmazonS3BucketName `
    #     -Region $AmazonRegion `
@@ -198,15 +217,17 @@ function Create-ClickOnce {
    #     -Key "$($relativeFilePath)" `
    #     -CannedACLName $AmazonCannedACLName
         
-   "Current Folder: $(Get-Location)"
+    Write-Verbose "Current Folder: $(Get-Location)"
  
-    "Moving back to project folder..."
-    popd
+    Write-Verbose "Moving back to project folder..."
+	popd
 
-   "Current Folder: $(Get-Location)"
+    Write-Verbose "Current Folder: $(Get-Location)"
     
-    "Saving Current Revision $revision to Revision.txt file..."
+    Write-Verbose  "Saving Current Revision $revision to Revision.txt file..."
     Set-Content -Value "$revision" -Path "./Revision.txt" -Encoding UTF8
-    "Done."
+    Write-Verbose "Done."
+
+    return $relativeFilePaths
 }
 
