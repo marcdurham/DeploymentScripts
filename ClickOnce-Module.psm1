@@ -25,7 +25,9 @@ function Publish-ClickOnce {
         $AmazonRegion, `
         $FileExtension, `
         $FileExtDescription, `
-        $FileExtProgId) 
+        $FileExtProgId, `
+        $VersionPrefix = "1.0.0.",
+        $Processor = "MSIL") 
 
     Write-Host "Creating ClickOnce deployment for $AppLongName..."
 
@@ -56,7 +58,7 @@ function Publish-ClickOnce {
     Write-Host "Getting last revision from Revision.txt..."
     $revisionString = Get-Content "../../Revision.txt"
     $revision = [Int32]::Parse($revisionString) + 1
-    $version = "1.0.0.$revision"
+    $version = "$VersionPrefix$revision"
     Write-Host "Deploying as version: $version"
     
     Write-Host "Current Folder: $(Get-Location)"
@@ -64,11 +66,10 @@ function Publish-ClickOnce {
     $appManifest = "$AppShortName.exe.manifest"
     $deployManifest = "$AppShortName.application"
 
-    $processor = "MSIL"
     $algorithm = "sha256RSA"
 
     $projectDir = "$($(Get-Location).Path)"
-    $OutputDir = "$projectDir/$OutputDir"
+    $OutputDir = (Resolve-Path "$projectDir/$OutputDir")
     $relativeVersionDir = "Application Files/$AppShortName" + "_$($version.Replace(".", "_"))"
     $versionDir = "$OutputDir/$relativeVersionDir"
     
@@ -111,7 +112,7 @@ function Publish-ClickOnce {
         -ToFile "$appManifestPath" `
         -Name $AppLongName `
         -Version $version `
-        -Processor $processor `
+        -Processor $Processor `
         -FromDirectory $versionDir `
         -TrustLevel FullTrust `
         -Algorithm $algorithm `
@@ -137,7 +138,7 @@ function Publish-ClickOnce {
         -Name $AppLongName `
         -Version $version `
         -MinVersion none `
-        -Processor $processor `
+        -Processor $Processor `
         -AppManifest "$appManifestPath" `
         -AppCodeBase "$($appCodeBasePath.Replace(" ", "%20"))" `
         -CertFile $CertFile `
