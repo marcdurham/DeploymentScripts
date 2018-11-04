@@ -29,7 +29,7 @@ function Publish-ClickOnce {
 
     Write-Host "Creating ClickOnce deployment for $AppLongName..."
 
-	Write-Host "Copying binary release files to output folders..." -ForegroundColor Green
+    Write-Host "Preparing files to be published..." -ForegroundColor Green
     Write-Host "Changing current directory to binary release folder..."
     pushd .\
     cd $BinaryReleaseFolder
@@ -108,11 +108,11 @@ function Publish-ClickOnce {
     Write-Host "Copying files into the release folder..."
     Copy-Item $Files -Destination $releaseFolder
     
-	# Creating and signing app manifest file
-	Write-Host "Creating and signing app manifest file..." -ForegroundColor Green
+    # Creating and signing app manifest file
+    Write-Host "Creating and signing app manifest file..." -ForegroundColor Green
     Write-Host "Generating application manifest file: $appManifestPath"
     mage -New Application `
-        -ToFile "$appManifestPath" `
+        -ToFile $appManifestPath `
         -Name $AppLongName `
         -Version $version `
         -Processor $Processor `
@@ -122,29 +122,29 @@ function Publish-ClickOnce {
         -IconFile $IconFile | Out-Host
 
     Write-Host "Adding file association to (unsigned) application manifest file... "
-    [xml]$appManifestXml = Get-Content (Resolve-Path "$appManifestPath")
+    [xml]$appManifestXml = Get-Content (Resolve-Path $appManifestPath)
     $association = $appManifestXml.CreateElement("fileAssociation")
     $association.SetAttribute("xmlns", "urn:schemas-microsoft-com:clickonce.v1")
-    $association.SetAttribute("extension", "$FileExtension")
-    $association.SetAttribute("description", "$FileExtDescription")
-    $association.SetAttribute("progid", "$FileExtProgId")
-    $association.SetAttribute("defaultIcon", "$IconFile")
+    $association.SetAttribute("extension", $FileExtension)
+    $association.SetAttribute("description", $FileExtDescription)
+    $association.SetAttribute("progid", $FileExtProgId)
+    $association.SetAttribute("defaultIcon", $IconFile)
     $appManifestXml.assembly.AppendChild($association) | Out-Null
-    $appManifestXml.Save((Resolve-Path "$appManifestPath"))
+    $appManifestXml.Save((Resolve-Path $appManifestPath))
 
-	Write-Host "Signing application manifest..."
-    mage -Sign "$appManifestPath" -CertFile $CertFile | Out-Host
+    Write-Host "Signing application manifest..."
+    mage -Sign $appManifestPath -CertFile $CertFile | Out-Host
 
-	# Creating unsigned deployment manifest files
-	Write-Host "Creating unsigned deployment manifest files..." -ForegroundColor Green
+    # Creating unsigned deployment manifest files
+    Write-Host "Creating unsigned deployment manifest files..." -ForegroundColor Green
     Write-Host "Generating root deployment manifest file: $rootDeployManifestPath"
     mage -New Deployment `
-        -ToFile "$rootDeployManifestPath" `
+        -ToFile $rootDeployManifestPath `
         -Name $AppLongName `
         -Version $version `
         -MinVersion $MinVersion `
         -Processor $Processor `
-        -AppManifest "$appManifestPath" `
+        -AppManifest $appManifestPath `
         -AppCodeBase "$($appCodeBasePath.Replace(" ", "%20"))" `
         -IncludeProviderURL true `
         -ProviderURL "$DeploymentRootUrl/$deployManifest" `
@@ -152,7 +152,7 @@ function Publish-ClickOnce {
         -Publisher $Publisher `
         -Algorithm $signingAlgorithm | Out-Host
 
-	Write-Hose "Preparing and altering files for web deployment..." -ForegroundColor Green
+    Write-Host "Preparing and altering files for web deployment..." -ForegroundColor Green
     Write-Host "Renaming files for web deployment, append .deploy..."
     Get-ChildItem $releaseFolder | `
         Foreach-Object { `
@@ -160,10 +160,10 @@ function Publish-ClickOnce {
                 Rename-Item $_.FullName "$($_.FullName).deploy" } } 
     
     Write-Host "Opening root deployment manifest to make changes..."
-    $rootDeployManifestXml = [xml](Get-Content "$rootDeployManifestPath")
+    $rootDeployManifestXml = [xml](Get-Content $rootDeployManifestPath)
     
     Write-Host "    Change application identiy name"
-    $rootDeployManifestXml.assembly.assemblyIdentity.SetAttribute("name", "$deployManifest")
+    $rootDeployManifestXml.assembly.assemblyIdentity.SetAttribute("name", $deployManifest)
     
     Write-Host "    Map file extensions to .deploy"
     $rootDeployManifestXml.assembly.deployment.SetAttribute("mapFileExtensions", "true")
@@ -173,22 +173,22 @@ function Publish-ClickOnce {
     $rootDeployManifestXml.assembly.deployment.subscription.update.expiration.SetAttribute("unit", "days")
     
     Write-Host "Saving changes to root deployment manifest..."
-    $rootDeployManifestXml.Save("$rootDeployManifestPath")
+    $rootDeployManifestXml.Save($rootDeployManifestPath)
 
     Write-Host "Copying root deployment manifest to release deployment manifest.."
-    $releaseDeployManifestXml = [xml](Get-Content "$rootDeployManifestPath")
+    $releaseDeployManifestXml = [xml](Get-Content $rootDeployManifestPath)
 
     Write-Host "Changing deploymentProvider code base to URL relative to release folder URL..."
     $releaseDeployManifestXml.assembly.deployment.deploymentProvider.SetAttribute("codebase", "$($releaseDeployUrl.Replace(" ", "%20"))")
 
     Write-Host "Saving changes to release deployment manifest..."
-    $releaseDeployManifestXml.Save("$releaseDeployManifestPath")
+    $releaseDeployManifestXml.Save($releaseDeployManifestPath)
 
     Write-Host "Signing root deployment manifest..." -ForegroundColor Green
-    mage -Sign "$rootDeployManifestPath" -CertFile $CertFile | Out-Host
+    mage -Sign $rootDeployManifestPath -CertFile $CertFile | Out-Host
 
     Write-Host "Signing release deployment manifest..." -ForegroundColor Green
-    mage -Sign "$releaseDeployManifestPath" -CertFile $CertFile | Out-Host
+    mage -Sign $releaseDeployManifestPath -CertFile $CertFile | Out-Host
     
     Write-Host "Changing current directory to OutputFolder..."
     cd $OutputFolder
@@ -196,7 +196,7 @@ function Publish-ClickOnce {
 
     $publishFiles = dir $releaseFolder -Recurse -File
 
-    $parentFolder = [System.IO.Path]::GetFullPath("$OutputFolder")
+    $parentFolder = [System.IO.Path]::GetFullPath($OutputFolder)
 
     [System.Collections.ArrayList]$relativeFilePaths = @()
     foreach ($f in $publishFiles) {
