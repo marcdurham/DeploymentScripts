@@ -122,6 +122,11 @@ function Publish-ClickOnce {
          Write-Host "    Output folder does not already exist.  Continue."
     }
 
+    if (-Not (Test-Path $OutputFolder)) {
+        Write-Host "Creating output folder..." -ForegroundColor Yellow
+        New-Item $OutputFolder -ItemType directory | Out-Null
+    }
+
     Write-Host "Creating release folder..."
     New-Item $releaseFolder -ItemType directory | Out-Null
  
