@@ -7,6 +7,7 @@ function Create-ClickOnce {
         $certFile, `
         $deploymentUrl, `
         $bucketName, `
+        $AmazonCannedACLName = "public-read", `
         $amazonRegion, `
         $fileExtension, `
         $fileExtensionDescription, `
@@ -162,18 +163,22 @@ function Create-ClickOnce {
 
     foreach ($f in $publishFiles) {
         $relativeFilePath = "$($f.FullName.SubString($parentFolder.Length+1))"
-        UploadTo-AmazonS3 `
-        -RelativeFilePath $relativeFilePath `
-        -AmazonBucketName $bucketName `
-        -AmazonRegion $amazonRegion
+        Write-S3Object `
+            -BucketName $amazonBucketName `
+            -Region $amazonRegion `
+            -File $relativeFilePath `
+            -Key "$($relativeFilePath)" `
+            -CannedACLName $AmazonCannedACLName
     }
 
     $realDeployManifestPath = [System.IO.Path]::GetFullPath($deployManifestPath)
     $relativeFilePath = "$($realDeployManifestPath.SubString($parentFolder.Length+1))"
-    UploadTo-AmazonS3 `
-        -RelativeFilePath $relativeFilePath `
-        -AmazonBucketName $bucketName `
-        -AmazonRegion $amazonRegion
+    Write-S3Object `
+        -BucketName $amazonBucketName `
+        -Region $amazonRegion `
+        -File $relativeFilePath `
+        -Key "$($relativeFilePath)" `
+        -CannedACLName $AmazonCannedACLName
         
     $here = Get-Location
     "Current Directory: $here"
