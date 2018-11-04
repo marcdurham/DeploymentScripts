@@ -11,18 +11,13 @@ function Publish-ClickOnce {
         [Parameter(Mandatory)]
         $Publisher, `
         [Parameter(Mandatory)]
-        $OutputDir, `
+        $OutputFolder, `
         [switch]
         $DeleteOutputDir, `
         [Parameter(Mandatory)]
         $CertFile, `
         [Parameter(Mandatory)]
         $DeploymentRootUrl, `
-        [Parameter(Mandatory)]
-        $AmazonS3BucketName, `
-        $AmazonCannedACLName = "public-read", `
-        [Parameter(Mandatory)]
-        $AmazonRegion, `
         $FileExtension, `
         $FileExtDescription, `
         $FileExtProgId, `
@@ -66,33 +61,33 @@ function Publish-ClickOnce {
     $appManifest = "$AppShortName.exe.manifest"
     $deployManifest = "$AppShortName.application"
 
-    $algorithm = "sha256RSA"
+    $signingAlgorithm = "sha256RSA"
 
-    $projectDir = "$($(Get-Location).Path)"
-    $OutputDir = (Resolve-Path "$projectDir/$OutputDir")
-    $relativeVersionDir = "Application Files/$AppShortName" + "_$($version.Replace(".", "_"))"
-    $versionDir = "$OutputDir/$relativeVersionDir"
+    $projectFolder = "$($(Get-Location).Path)"
+    $OutputFolder = (Resolve-Path "$projectFolder/$OutputFolder")
+    $releaseRelativePath = "Application Files/$AppShortName" + "_$($version.Replace(".", "_"))"
+    $releaseFolder = "$OutputFolder/$releaseRelativePath"
     
-    Write-Host "Project Dir: $projectDir"
-    Write-Host "Output Dir: $OutputDir"
-    Write-Host "Version Dir: $versionDir"
+    Write-Host "Project Folder: $projectFolder"
+    Write-Host "Output Folder: $OutputFolder"
+    Write-Host "Release Folder: $releaseFolder"
 
-    $appCodeBasePath = "$relativeVersionDir/$appManifest"
-    $appManifestPath = "$versionDir/$appManifest"
-    $deployManifestPath = "$OutputDir/$deployManifest"
-    $secondDeployManifestPath = "$versionDir/$deployManifest"
-    $secondDeployUrl = "$DeploymentRootUrl/$relativeVersionDir/$deployManifest"
+    $appCodeBasePath = "$releaseRelativePath/$appManifest"
+    $appManifestPath = "$releaseFolder/$appManifest"
+    $rootDeployManifestPath = "$OutputFolder/$deployManifest"
+    $releaseDeployManifestPath = "$releaseFolder/$deployManifest"
+    $releaseDeployUrl = "$DeploymentRootUrl/$releaseRelativePath/$deployManifest"
 
     Write-Host "Appliction Manifest Path: $appManifestPath"
-    Write-Host "Deployment Manifest Path: $deployManifestPath"
-    Write-Host "Second Deployment Manifest Path: $secondDeployManifestPath"
+    Write-Host "Root Deployment Manifest Path: $rootDeployManifestPath"
+    Write-Host "Release Deployment Manifest Path: $releaseDeployManifestPath"
     
     Write-Host "Checking if output folder already exists..."
-    if (Get-Item $versionDir -ErrorAction  SilentlyContinue) {
+    if (Get-Item $releaseFolder -ErrorAction  SilentlyContinue) {
         Write-Host "    Output folder already exists."
         if ($DeleteOutputDir) {
             Write-Host "    Deleting existing output folder..."
-            Remove-Item -Recurse $versionDir
+            Remove-Item -Recurse $releaseFolder
         } else {
             Write-Host "    Include the -DeleteOutputDir parameter to automatically delete an existing output folder with the same name."
             return
@@ -102,10 +97,10 @@ function Publish-ClickOnce {
     }
 
     Write-Host "Creating output folders..."
-    New-Item $versionDir -ItemType directory | Out-Null
+    New-Item $releaseFolder -ItemType directory | Out-Null
  
     Write-Host "Copying files into the output folder..."
-    Copy-Item $Files -Destination $versionDir
+    Copy-Item $Files -Destination $releaseFolder
     
     Write-Host "Generating application manifest file: $appManifestPath"
     mage -New Application `
@@ -113,9 +108,9 @@ function Publish-ClickOnce {
         -Name $AppLongName `
         -Version $version `
         -Processor $Processor `
-        -FromDirectory $versionDir `
+        -FromDirectory $releaseFolder `
         -TrustLevel FullTrust `
-        -Algorithm $algorithm `
+        -Algorithm $signingAlgorithm `
         -IconFile $IconFile | Out-Host
 
     Write-Host "Adding file association to application manifest file ... "
@@ -132,9 +127,9 @@ function Publish-ClickOnce {
     mage -Sign "$appManifestPath" `
         -CertFile "$CertFile" | Out-Host
 
-    Write-Host "Generating deployment manifest file: $deployManifestPath"
+    Write-Host "Generating deployment manifest file: $rootDeployManifestPath"
     mage -New Deployment `
-        -ToFile "$deployManifestPath" `
+        -ToFile "$rootDeployManifestPath" `
         -Name $AppLongName `
         -Version $version `
         -MinVersion none `
@@ -146,10 +141,10 @@ function Publish-ClickOnce {
         -ProviderURL "$DeploymentRootUrl/$deployManifest" `
         -Install true `
         -Publisher $Publisher `
-        -Algorithm $algorithm | Out-Host
+        -Algorithm $signingAlgorithm | Out-Host
 
     Write-Host "Renaming files for web server deployment with .deploy..."
-    Get-ChildItem $versionDir | `
+    Get-ChildItem $releaseFolder | `
         Foreach-Object { `
             if (-not $_.FullName.EndsWith(".manifest")) { `
                 Rename-Item $_.FullName "$($_.FullName).deploy" } } 
@@ -158,7 +153,7 @@ function Publish-ClickOnce {
     mage -Sign "$appManifestPath" -CertFile $CertFile | Out-Host
     
     Write-Host "Altering inner  deployment manifest details..."
-    $xml = [xml](Get-Content "$deployManifestPath")
+    $xml = [xml](Get-Content "$rootDeployManifestPath")
     
     #Change application identiy name
     $assemblyIdentityNode = $xml.SelectSingleNode("//*[local-name() = 'assemblyIdentity']")
@@ -174,36 +169,36 @@ function Publish-ClickOnce {
     $expirationNode.SetAttribute("unit", "days")
     
     Write-Host "Saving altered inner deployment manifest..."
-    $xml.Save("$deployManifestPath")
+    $xml.Save("$rootDeployManifestPath")
 
     Write-Host "Signing altered inner deployment manifest..."
-    mage -Sign "$deployManifestPath" `
+    mage -Sign "$rootDeployManifestPath" `
         -CertFile $CertFile | Out-Host
 
     Write-Host "Loading deployment manifest to make root copy..."
-    $secondXml = [xml](Get-Content "$deployManifestPath")
+    $secondXml = [xml](Get-Content "$rootDeployManifestPath")
 
     Write-Host "Altering root deployment manifest..."
     $deploymentProviderNode = $secondXml.SelectSingleNode("//*[local-name() = 'deploymentProvider']")
     $deploymentProviderNode.SetAttribute("codebase", "$($secondDeployUrl.Replace(" ", "%20"))")
 
     Write-Host "Saving altered root deployment manifest..."
-    $secondXml.Save("$secondDeployManifestPath")
+    $secondXml.Save("$releaseDeployManifestPath")
 
     Write-Host "Signing altered root deployment manifest..."
-    mage -Sign "$secondDeployManifestPath" `
+    mage -Sign "$releaseDeployManifestPath" `
         -CertFile $CertFile | Out-Host
 
     Write-Host "ClickOnce deployment created."
     Write-Host "Uploading files to Amazon Web Services S3..."
     
     Write-Host "Moving to Output Folder..."
-    cd $OutputDir
+    cd $OutputFolder
     Write-Host "Current Folder: $(Get-Location)"
 
-    $publishFiles = dir $versionDir -Recurse -File
+    $publishFiles = dir $releaseFolder -Recurse -File
 
-    $parentFolder = [System.IO.Path]::GetFullPath("$OutputDir")
+    $parentFolder = [System.IO.Path]::GetFullPath("$OutputFolder")
 
     [System.Collections.ArrayList]$relativeFilePaths = @()
     foreach ($f in $publishFiles) {
@@ -212,7 +207,7 @@ function Publish-ClickOnce {
     }
 
     Write-Host "Last File:"
-    $realDeployManifestPath = [System.IO.Path]::GetFullPath($deployManifestPath)
+    $realDeployManifestPath = [System.IO.Path]::GetFullPath($rootDeployManifestPath)
     $relativeFilePath = "$($realDeployManifestPath.SubString($parentFolder.Length+1))"
     $relativeFilePaths.Add($relativeFilePath) | Out-Null
         
