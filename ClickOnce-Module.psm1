@@ -1,23 +1,25 @@
 function Create-ClickOnce {
     param(
-        [Parameter(Required)]
+        [Parameter(Mandatory)]
+        $Files, `
+        [Parameter(Mandatory)]
         $AppLongName, `
-        [Parameter(Required)]
+        [Parameter(Mandatory)]
         $AppShortName, `
-        [Parameter(Required)]
+        [Parameter(Mandatory)]
         $IconFile, `
-        [Parameter(Required)]
+        [Parameter(Mandatory)]
         $Publisher, `
-        [Parameter(Required)]
+        [Parameter(Mandatory)]
         $OutputDir, `
-        [Parameter(Required)]
+        [Parameter(Mandatory)]
         $CertFile, `
-        [Parameter(Required)]
+        [Parameter(Mandatory)]
         $DeploymentRootUrl, `
-        [Parameter(Required)]
+        [Parameter(Mandatory)]
         $AmazonS3BucketName, `
         $AmazonCannedACLName = "public-read", `
-        [Parameter(Required)]
+        [Parameter(Mandatory)]
         $AmazonRegion, `
         $FileExt, `
         $FileExtDescription, `
@@ -25,8 +27,12 @@ function Create-ClickOnce {
 
     "Creating ClickOnce deployment for $AppLongName..."
 
-    # The first file, at index 0, will be the "Entry Point" file, the main .exe.
-    $files = $args[0] 
+    "Peparing $($Files.Count) Files to Deploy:"
+    foreach ($f in $Files) {
+        "    $f"
+    }
+
+    "The first file, at index 0, will be the ""Entry Point"" file, or the main .exe."
 
     "Getting last revision from Revision.txt..."
     $revisionString = Get-Content "./Revision.txt"
@@ -38,8 +44,7 @@ function Create-ClickOnce {
     pushd .\
     cd ".\bin\Release"
     
-    $currentFolder = Get-Location
-    "Current Folder: $currentFolder"
+    "Current Folder: $(Get-Location)"
     
     # TODO: Use these two variables, or delete them
     $appManifest = "$AppShortName.exe.manifest"
@@ -71,7 +76,7 @@ function Create-ClickOnce {
     mkdir $versionDir
  
     "Copying files into the output folder..."
-    Copy-Item $files -Destination $versionDir
+    Copy-Item $Files -Destination $versionDir
     
     "Generating application manifest file: $appManifestPath"
     mage -New Application `
@@ -165,38 +170,40 @@ function Create-ClickOnce {
     "Moving to Output Folder..."
     cd $OutputDir
     $currentFolder = Get-Location
-    "Current Director: $currentFolder"
+    "Current Folder: $currentFolder"
 
     $publishFiles = dir $versionDir -Recurse -File
 
     $parentFolder = [System.IO.Path]::GetFullPath("$OutputDir")
 
+    #[System.Collections.ArrayList]$relativeFilePaths
     foreach ($f in $publishFiles) {
         $relativeFilePath = "$($f.FullName.SubString($parentFolder.Length+1))"
-        Write-S3Object `
-            -BucketName $AmazonS3BucketName `
-            -Region $AmazonRegion `
-            -File $relativeFilePath `
-            -Key "$($relativeFilePath)" `
-            -CannedACLName $AmazonCannedACLName
+        "$relativeFilePath"
+        #Write-S3Object `
+        #    -BucketName $AmazonS3BucketName `
+        #    -Region $AmazonRegion `
+        #    -File $relativeFilePath `
+        #    -Key "$($relativeFilePath)" `
+        #    -CannedACLName $AmazonCannedACLName
     }
 
     $realDeployManifestPath = [System.IO.Path]::GetFullPath($deployManifestPath)
     $relativeFilePath = "$($realDeployManifestPath.SubString($parentFolder.Length+1))"
-    Write-S3Object `
-        -BucketName $AmazonS3BucketName `
-        -Region $AmazonRegion `
-        -File $relativeFilePath `
-        -Key "$($relativeFilePath)" `
-        -CannedACLName $AmazonCannedACLName
+    "$relativeFilePath"
+   # Write-S3Object `
+   #     -BucketName $AmazonS3BucketName `
+   #     -Region $AmazonRegion `
+   #     -File $relativeFilePath `
+   #     -Key "$($relativeFilePath)" `
+   #     -CannedACLName $AmazonCannedACLName
         
-    $here = Get-Location
-    "Current Directory: $here"
+   "Current Folder: $(Get-Location)"
  
     "Moving back to project folder..."
     popd
-    $currentFolder = Get-Location
-    "Current Directory: $currentFolder"
+
+   "Current Folder: $(Get-Location)"
     
     "Saving Current Revision $revision to Revision.txt file..."
     Set-Content -Value "$revision" -Path "./Revision.txt" -Encoding UTF8
