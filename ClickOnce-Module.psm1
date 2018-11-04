@@ -51,6 +51,7 @@ function Publish-ClickOnce {
     }
 
     Write-Host "The first file, at index 0, will be the ""Entry Point"" file, or the main .exe."
+    Write-Host "Entry Point: $($Files[0])"
 
     Write-Host "Getting last revision from Revision.txt..."
     $revisionString = Get-Content "../../Revision.txt"
