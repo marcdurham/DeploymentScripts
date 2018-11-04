@@ -174,7 +174,7 @@ function Create-ClickOnce {
     foreach ($f in $publishFiles) {
         $relativeFilePath = "$($f.FullName.SubString($parentFolder.Length+1))"
         Write-S3Object `
-            -BucketName $amazonBucketName `
+            -BucketName $AmazonS3BucketName `
             -Region $AmazonRegion `
             -File $relativeFilePath `
             -Key "$($relativeFilePath)" `
@@ -184,7 +184,7 @@ function Create-ClickOnce {
     $realDeployManifestPath = [System.IO.Path]::GetFullPath($deployManifestPath)
     $relativeFilePath = "$($realDeployManifestPath.SubString($parentFolder.Length+1))"
     Write-S3Object `
-        -BucketName $amazonBucketName `
+        -BucketName $AmazonS3BucketName `
         -Region $AmazonRegion `
         -File $relativeFilePath `
         -Key "$($relativeFilePath)" `
@@ -192,7 +192,7 @@ function Create-ClickOnce {
         
     $here = Get-Location
     "Current Directory: $here"
-    
+ 
     "Moving back to project folder..."
     popd
     $currentFolder = Get-Location
