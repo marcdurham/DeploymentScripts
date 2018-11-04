@@ -28,18 +28,18 @@ $files = `
 
 "Creating ClickOnce manifest files..." 
 Create-ClickOnce $files `
-    -AppProperName "Application Name" `
+    -AppLongName "Full Application Name" `
     -AppShortName "AppName" `
-    -IconFilename "AppNameIcon.ico" `
-    -Publisher "Marc Durham" `
+    -IconFile "AppNameIcon.ico" `
+    -Publisher "Your Name" `
     -OutputDir "../../../../ClickOnceDeploy" `
     -CertFile "../../../AppName.pfx" `
-    -DeploymentUrl "http://appname.md9.us" `
+    -DeploymentRootUrl "http://appname.md9.us" `
     -AmazonRegion "us-west-2" `
-    -BucketName "appname.md9.us" `
-	-FileExtension ".abc" `
-    -FileExtensionDescription "Application Name ABC File" `
-    -FileExtensionProgId "AppName.ABC" `
+    -AmazonS3BucketName "appname.md9.us" `
+    -FileExt ".abc" `
+    -FileExtDescription "Application Name ABC File" `
+    -FileExtProgId "AppName.ABC" `
     -ErrorAction Stop
 
 popd

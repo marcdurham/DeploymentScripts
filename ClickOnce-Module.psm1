@@ -1,19 +1,32 @@
 function Create-ClickOnce {
-    param($appProperName, `
-        $appShortName, `
-        $iconFilename, `
-        $publisher, `
-        $outputDir, `
-        $certFile, `
-        $deploymentUrl, `
-        $bucketName, `
+    param(
+        [Parameter(Required)]
+        $AppLongName, `
+        [Parameter(Required)]
+        $AppShortName, `
+        [Parameter(Required)]
+        $IconFile, `
+        [Parameter(Required)]
+        $Publisher, `
+        [Parameter(Required)]
+        $OutputDir, `
+        [Parameter(Required)]
+        $CertFile, `
+        [Parameter(Required)]
+        $DeploymentRootUrl, `
+        [Parameter(Required)]
+        $AmazonS3BucketName, `
         $AmazonCannedACLName = "public-read", `
-        $amazonRegion, `
-        $fileExtension, `
-        $fileExtensionDescription, `
-        $fileExtensionProgId) 
+        [Parameter(Required)]
+        $AmazonRegion, `
+        $FileExt, `
+        $FileExtDescription, `
+        $FileExtProgId) 
 
-    "Creating ClickOnce deployment for $appProperName..."
+    "Creating ClickOnce deployment for $AppLongName..."
+
+    # The first file, at index 0, will be the "Entry Point" file, the main .exe.
+    $files = $args[0] 
 
     "Getting last revision from Revision.txt..."
     $revisionString = Get-Content "./Revision.txt"
@@ -27,31 +40,28 @@ function Create-ClickOnce {
     
     $currentFolder = Get-Location
     "Current Folder: $currentFolder"
-
-    # The first file is the "Entry Point" file, the main .exe.
-    $files = $args[0] 
     
     # TODO: Use these two variables, or delete them
-    $appManifest = "$appShortName.exe.manifest"
-    $deployManifest = "$appShortName.application"
+    $appManifest = "$AppShortName.exe.manifest"
+    $deployManifest = "$AppShortName.application"
 
     $processor = "MSIL"
     $algorithm = "sha256RSA"
 
     $projectDir = "$($(Get-Location).Path)"
-    $outputDir = "$projectDir/$outputDir"
-    $relativeVersionDir = "Application Files/$appShortName" + "_$($version.Replace(".", "_"))"
-    $versionDir = "$outputDir/$relativeVersionDir"
+    $OutputDir = "$projectDir/$OutputDir"
+    $relativeVersionDir = "Application Files/$AppShortName" + "_$($version.Replace(".", "_"))"
+    $versionDir = "$OutputDir/$relativeVersionDir"
     
     "Project Dir: $projectDir"
-    "Output Dir: $outputDir"
+    "Output Dir: $OutputDir"
     "Version Dir: $versionDir"
 
     $appCodeBasePath = "$relativeVersionDir/$appManifest"
     $appManifestPath = "$versionDir/$appManifest"
-    $deployManifestPath = "$outputDir/$deployManifest"
+    $deployManifestPath = "$OutputDir/$deployManifest"
     $secondDeployManifestPath = "$versionDir/$deployManifest"
-    $secondDeployUrl = "$deploymentUrl/$relativeVersionDir/$deployManifest"
+    $secondDeployUrl = "$DeploymentRootUrl/$relativeVersionDir/$deployManifest"
 
     "Appliction Manifest Path: $appManifestPath"
     "Deployment Manifest Path: $deployManifestPath"
@@ -66,45 +76,45 @@ function Create-ClickOnce {
     "Generating application manifest file: $appManifestPath"
     mage -New Application `
         -ToFile "$appManifestPath" `
-        -Name $appProperName `
+        -Name $AppLongName `
         -Version $version `
         -Processor $processor `
         -FromDirectory $versionDir `
         -TrustLevel FullTrust `
         -Algorithm $algorithm `
-        -IconFile $iconFilename
+        -IconFile $IconFile
 
     "Adding file association to application manifest file ... "
     [xml]$doc = Get-Content (Resolve-Path "$appManifestPath")
     $fa = $doc.CreateElement("fileAssociation")
     $fa.SetAttribute("xmlns", "urn:schemas-microsoft-com:clickonce.v1")
-    $fa.SetAttribute("extension", "$fileExtension")
-    $fa.SetAttribute("description", "$fileExtensionDescription")
-    $fa.SetAttribute("progid", "$fileExtensionProgId")
-    $fa.SetAttribute("defaultIcon", "$iconFilename")
+    $fa.SetAttribute("extension", "$FileExt")
+    $fa.SetAttribute("description", "$FileExtDescription")
+    $fa.SetAttribute("progid", "$FileExtProgId")
+    $fa.SetAttribute("defaultIcon", "$IconFile")
     $doc.assembly.AppendChild($fa)
     $doc.Save((Resolve-Path "$appManifestPath"))
 
     mage -Sign "$appManifestPath" `
-        -CertFile "$certFile"
+        -CertFile "$CertFile"
 
     "Generating deployment manifest file: $deployManifestPath"
     mage -New Deployment `
         -ToFile "$deployManifestPath" `
-        -Name $appProperName `
+        -Name $AppLongName `
         -Version $version `
         -MinVersion none `
         -Processor $processor `
         -AppManifest "$appManifestPath" `
         -AppCodeBase "$($appCodeBasePath.Replace(" ", "%20"))" `
-        -CertFile $certFile `
+        -CertFile $CertFile `
         -IncludeProviderURL true `
-        -ProviderURL "$deploymentUrl/$deployManifest" `
+        -ProviderURL "$DeploymentRootUrl/$deployManifest" `
         -Install true `
-        -Publisher $publisher `
+        -Publisher $Publisher `
         -Algorithm $algorithm 
 
-    #-ProviderURL "$deploymentUrl/$deployManifest" `
+    #-ProviderURL "$DeploymentRootUrl/$deployManifest" `
     "Renaming files for web server deployment with .deploy..."
     Get-ChildItem $versionDir | `
         Foreach-Object { `
@@ -112,7 +122,7 @@ function Create-ClickOnce {
                 Rename-Item $_.FullName "$($_.FullName).deploy" } } 
 
     "Resigning application manifest..."
-    mage -Sign "$appManifestPath" -CertFile $certFile 
+    mage -Sign "$appManifestPath" -CertFile $CertFile 
  
     "Altering deployment manifest details..."
     $xml = [xml](Get-Content "$deployManifestPath")
@@ -134,7 +144,7 @@ function Create-ClickOnce {
     $xml.Save("$deployManifestPath")
 
     "Signing first altered deployment manifest..."
-    mage -Sign "$deployManifestPath" -CertFile $certFile 
+    mage -Sign "$deployManifestPath" -CertFile $CertFile 
 
     "Loading deployment manifest to make second copy..."
     $secondXml = [xml](Get-Content "$deployManifestPath")
@@ -147,25 +157,25 @@ function Create-ClickOnce {
     $secondXml.Save("$secondDeployManifestPath")
 
     "Signing second altered deployment manifest..."
-    mage -Sign "$secondDeployManifestPath" -CertFile $certFile 
+    mage -Sign "$secondDeployManifestPath" -CertFile $CertFile 
 
     "ClickOnce deployment created."
     "Uploading files to Amazon Web Services S3..."
     
     "Moving to Output Folder..."
-    cd $outputDir
+    cd $OutputDir
     $currentFolder = Get-Location
     "Current Director: $currentFolder"
 
     $publishFiles = dir $versionDir -Recurse -File
 
-    $parentFolder = [System.IO.Path]::GetFullPath("$outputdir")
+    $parentFolder = [System.IO.Path]::GetFullPath("$OutputDir")
 
     foreach ($f in $publishFiles) {
         $relativeFilePath = "$($f.FullName.SubString($parentFolder.Length+1))"
         Write-S3Object `
             -BucketName $amazonBucketName `
-            -Region $amazonRegion `
+            -Region $AmazonRegion `
             -File $relativeFilePath `
             -Key "$($relativeFilePath)" `
             -CannedACLName $AmazonCannedACLName
@@ -175,7 +185,7 @@ function Create-ClickOnce {
     $relativeFilePath = "$($realDeployManifestPath.SubString($parentFolder.Length+1))"
     Write-S3Object `
         -BucketName $amazonBucketName `
-        -Region $amazonRegion `
+        -Region $AmazonRegion `
         -File $relativeFilePath `
         -Key "$($relativeFilePath)" `
         -CannedACLName $AmazonCannedACLName
