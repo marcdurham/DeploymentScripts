@@ -29,6 +29,7 @@ function Publish-ClickOnce {
 
     Write-Host "Creating ClickOnce deployment for $AppLongName..."
 
+	Write-Host "Copying binary release files to output folders..." -ForegroundColor Green
     Write-Host "Changing current directory to binary release folder..."
     pushd .\
     cd $BinaryReleaseFolder
@@ -107,6 +108,8 @@ function Publish-ClickOnce {
     Write-Host "Copying files into the release folder..."
     Copy-Item $Files -Destination $releaseFolder
     
+	# Creating and signing app manifest file
+	Write-Host "Creating and signing app manifest file..." -ForegroundColor Green
     Write-Host "Generating application manifest file: $appManifestPath"
     mage -New Application `
         -ToFile "$appManifestPath" `
@@ -129,6 +132,11 @@ function Publish-ClickOnce {
     $appManifestXml.assembly.AppendChild($association) | Out-Null
     $appManifestXml.Save((Resolve-Path "$appManifestPath"))
 
+	Write-Host "Signing application manifest..."
+    mage -Sign "$appManifestPath" -CertFile $CertFile | Out-Host
+
+	# Creating unsigned deployment manifest files
+	Write-Host "Creating unsigned deployment manifest files..." -ForegroundColor Green
     Write-Host "Generating root deployment manifest file: $rootDeployManifestPath"
     mage -New Deployment `
         -ToFile "$rootDeployManifestPath" `
@@ -144,14 +152,12 @@ function Publish-ClickOnce {
         -Publisher $Publisher `
         -Algorithm $signingAlgorithm | Out-Host
 
+	Write-Hose "Preparing and altering files for web deployment..." -ForegroundColor Green
     Write-Host "Renaming files for web deployment, append .deploy..."
     Get-ChildItem $releaseFolder | `
         Foreach-Object { `
             if (-not $_.FullName.EndsWith(".manifest")) { `
                 Rename-Item $_.FullName "$($_.FullName).deploy" } } 
-
-    Write-Host "Signing application manifest..."
-    mage -Sign "$appManifestPath" -CertFile $CertFile | Out-Host
     
     Write-Host "Opening root deployment manifest to make changes..."
     $rootDeployManifestXml = [xml](Get-Content "$rootDeployManifestPath")
@@ -178,10 +184,10 @@ function Publish-ClickOnce {
     Write-Host "Saving changes to release deployment manifest..."
     $releaseDeployManifestXml.Save("$releaseDeployManifestPath")
 
-    Write-Host "Signing root deployment manifest..."
+    Write-Host "Signing root deployment manifest..." -ForegroundColor Green
     mage -Sign "$rootDeployManifestPath" -CertFile $CertFile | Out-Host
 
-    Write-Host "Signing release deployment manifest..."
+    Write-Host "Signing release deployment manifest..." -ForegroundColor Green
     mage -Sign "$releaseDeployManifestPath" -CertFile $CertFile | Out-Host
     
     Write-Host "Changing current directory to OutputFolder..."
