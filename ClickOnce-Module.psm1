@@ -13,7 +13,7 @@ function Create-ClickOnce {
         [Parameter(Mandatory)]
         $OutputDir, `
         [switch]
-		$DeleteOutputDir, `
+        $DeleteOutputDir, `
         [Parameter(Mandatory)]
         $CertFile, `
         [Parameter(Mandatory)]
@@ -48,7 +48,6 @@ function Create-ClickOnce {
     
     Write-Verbose "Current Folder: $(Get-Location)"
     
-    # TODO: Use these two variables, or delete them
     $appManifest = "$AppShortName.exe.manifest"
     $deployManifest = "$AppShortName.application"
 
@@ -74,19 +73,19 @@ function Create-ClickOnce {
     Write-Verbose "Deployment Manifest Path: $deployManifestPath"
     Write-Verbose "Second Deployment Manifest Path: $secondDeployManifestPath"
     
-	Write-Verbose "Checking if output folder already exists..."
-	if (Get-Item $versionDir -ErrorAction  SilentlyContinue) {
-	    Write-Verbose "    Output folder already exists."
-	    if ($DeleteOutputDir) {
-		    Write-Verbose "    Deleting existing output folder..."
-		    Remove-Item -Recurse $versionDir
-		} else {
-			Write-Verbose "    Include the -DeleteOutputDir parameter to automatically delete an existing output folder with the same name."
-			return
-		}
-	} else {
-		Write-Verbose "    Output folder does not already exist.  Continue."
-	}
+    Write-Verbose "Checking if output folder already exists..."
+    if (Get-Item $versionDir -ErrorAction  SilentlyContinue) {
+        Write-Verbose "    Output folder already exists."
+        if ($DeleteOutputDir) {
+            Write-Verbose "    Deleting existing output folder..."
+            Remove-Item -Recurse $versionDir
+        } else {
+            Write-Verbose "    Include the -DeleteOutputDir parameter to automatically delete an existing output folder with the same name."
+            return
+        }
+    } else {
+        Write-Verbose "    Output folder does not already exist.  Continue."
+    }
 
     Write-Verbose "Creating output folders..."
     mkdir $versionDir
@@ -103,7 +102,7 @@ function Create-ClickOnce {
         -FromDirectory $versionDir `
         -TrustLevel FullTrust `
         -Algorithm $algorithm `
-        -IconFile $IconFile
+        -IconFile $IconFile | Out-Null
 
     Write-Verbose "Adding file association to application manifest file ... "
     [xml]$doc = Get-Content (Resolve-Path "$appManifestPath")
@@ -117,7 +116,7 @@ function Create-ClickOnce {
     $doc.Save((Resolve-Path "$appManifestPath"))
 
     mage -Sign "$appManifestPath" `
-        -CertFile "$CertFile"
+        -CertFile "$CertFile" | Out-Null
 
     Write-Verbose "Generating deployment manifest file: $deployManifestPath"
     mage -New Deployment `
@@ -133,7 +132,7 @@ function Create-ClickOnce {
         -ProviderURL "$DeploymentRootUrl/$deployManifest" `
         -Install true `
         -Publisher $Publisher `
-        -Algorithm $algorithm 
+        -Algorithm $algorithm | Out-Null
 
     Write-Verbose "Renaming files for web server deployment with .deploy..."
     Get-ChildItem $versionDir | `
@@ -142,7 +141,7 @@ function Create-ClickOnce {
                 Rename-Item $_.FullName "$($_.FullName).deploy" } } 
 
     Write-Verbose "Resigning application manifest..."
-    mage -Sign "$appManifestPath" -CertFile $CertFile 
+    mage -Sign "$appManifestPath" -CertFile $CertFile | Out-Null
  
     Write-Verbose "Altering deployment manifest details..."
     $xml = [xml](Get-Content "$deployManifestPath")
@@ -164,7 +163,8 @@ function Create-ClickOnce {
     $xml.Save("$deployManifestPath")
 
     Write-Verbose "Signing first altered deployment manifest..."
-    mage -Sign "$deployManifestPath" -CertFile $CertFile 
+    mage -Sign "$deployManifestPath" `
+        -CertFile $CertFile | Out-Null
 
     Write-Verbose "Loading deployment manifest to make second copy..."
     $secondXml = [xml](Get-Content "$deployManifestPath")
@@ -177,7 +177,8 @@ function Create-ClickOnce {
     $secondXml.Save("$secondDeployManifestPath")
 
     Write-Verbose "Signing second altered deployment manifest..."
-    mage -Sign "$secondDeployManifestPath" -CertFile $CertFile 
+    mage -Sign "$secondDeployManifestPath" `
+        -CertFile $CertFile | Out-Null
 
     Write-Verbose "ClickOnce deployment created."
     Write-Verbose "Uploading files to Amazon Web Services S3..."
@@ -188,7 +189,7 @@ function Create-ClickOnce {
 
     $publishFiles = dir $versionDir -Recurse -File
 
-	Write-Verbose "DIR WORKED"
+    Write-Verbose "DIR WORKED"
 
     $parentFolder = [System.IO.Path]::GetFullPath("$OutputDir")
 
@@ -205,10 +206,10 @@ function Create-ClickOnce {
         #    -CannedACLName $AmazonCannedACLName
     }
 
-	Write-Verbose "Last File:"
+    Write-Verbose "Last File:"
     $realDeployManifestPath = [System.IO.Path]::GetFullPath($deployManifestPath)
     $relativeFilePath = "$($realDeployManifestPath.SubString($parentFolder.Length+1))"
-     Write-Verbose "$relativeFilePath"
+    Write-Verbose "$relativeFilePath"
     $relativeFilePaths.Add($relativeFilePath)
    # Write-S3Object `
    #     -BucketName $AmazonS3BucketName `
@@ -220,7 +221,7 @@ function Create-ClickOnce {
     Write-Verbose "Current Folder: $(Get-Location)"
  
     Write-Verbose "Moving back to project folder..."
-	popd
+    popd
 
     Write-Verbose "Current Folder: $(Get-Location)"
     
