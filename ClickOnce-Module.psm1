@@ -13,7 +13,7 @@ function Publish-ClickOnce {
         [Parameter(Mandatory)]
         $OutputFolder, `
         [switch]
-        $DeleteOutputDir, `
+        $DeleteOutputFolder, `
         [Parameter(Mandatory)]
         $CertFile, `
         [Parameter(Mandatory)]
@@ -23,9 +23,9 @@ function Publish-ClickOnce {
         $FileExtProgId, `
         $VersionPrefix = "1.0.0.", `
         $Processor = "MSIL", `
-		$BinaryReleaseFolder = ".\bin\Release", `
-		$ProjectFolder = ".\", `
-		$MinVersion = "none") 
+        $BinaryReleaseFolder = ".\bin\Release", `
+        $ProjectFolder = ".\", `
+        $MinVersion = "none") 
 
     Write-Host "Creating ClickOnce deployment for $AppLongName..."
 
@@ -65,8 +65,9 @@ function Publish-ClickOnce {
     $deployManifest = "$AppShortName.application"
     $signingAlgorithm = "sha256RSA"
 
-	if ($ProjectFolder -eq ".\")
-		$ProjectFolder = "$($(Get-Location).Path)"
+    if ($ProjectFolder -eq ".\") {
+        $ProjectFolder = "$($(Get-Location).Path)"
+    }
 
     $OutputFolder = (Resolve-Path "$ProjectFolder/$OutputFolder")
     $releaseRelativePath = "Application Files/$AppShortName" + "_$($version.Replace(".", "_"))"
@@ -89,7 +90,7 @@ function Publish-ClickOnce {
     Write-Host "Checking if output folder already exists..."
     if (Get-Item $releaseFolder -ErrorAction  SilentlyContinue) {
         Write-Host "    Output folder already exists."
-        if ($DeleteOutputDir) {
+        if ($DeleteOutputFolder) {
             Write-Host "    Deleting existing output folder..."
             Remove-Item -Recurse $releaseFolder
         } else {
@@ -117,7 +118,7 @@ function Publish-ClickOnce {
         -Algorithm $signingAlgorithm `
         -IconFile $IconFile | Out-Host
 
-    Write-Host "Adding file association to (unsigned) application manifest file ... "
+    Write-Host "Adding file association to (unsigned) application manifest file... "
     [xml]$appManifestXml = Get-Content (Resolve-Path "$appManifestPath")
     $association = $appManifestXml.CreateElement("fileAssociation")
     $association.SetAttribute("xmlns", "urn:schemas-microsoft-com:clickonce.v1")
@@ -127,9 +128,6 @@ function Publish-ClickOnce {
     $association.SetAttribute("defaultIcon", "$IconFile")
     $appManifestXml.assembly.AppendChild($association) | Out-Null
     $appManifestXml.Save((Resolve-Path "$appManifestPath"))
-
-    #mage -Sign "$appManifestPath" `
-    #    -CertFile "$CertFile" | Out-Host
 
     Write-Host "Generating root deployment manifest file: $rootDeployManifestPath"
     mage -New Deployment `
@@ -155,47 +153,38 @@ function Publish-ClickOnce {
     Write-Host "Signing application manifest..."
     mage -Sign "$appManifestPath" -CertFile $CertFile | Out-Host
     
-    Write-Host "Altering inner  deployment manifest details..."
-    $xml = [xml](Get-Content "$rootDeployManifestPath")
+    Write-Host "Opening root deployment manifest to make changes..."
+    $rootDeployManifestXml = [xml](Get-Content "$rootDeployManifestPath")
     
-    #Change application identiy name
-    $assemblyIdentityNode = $xml.SelectSingleNode("//*[local-name() = 'assemblyIdentity']")
-    $assemblyIdentityNode.SetAttribute("name", "$deployManifest")
+    Write-Host "    Change application identiy name"
+    $rootDeployManifestXml.assembly.assemblyIdentity.SetAttribute("name", "$deployManifest")
     
-    #Map file extensions to .deploy
-    $deploymentNode = $xml.SelectSingleNode("//*[local-name() = 'deployment']")
-    $deploymentNode.SetAttribute("mapFileExtensions", "true")
+    Write-Host "    Map file extensions to .deploy"
+    $rootDeployManifestXml.assembly.deployment.SetAttribute("mapFileExtensions", "true")
     
-    #Update every day
-    $expirationNode = $xml.SelectSingleNode("//*[local-name() = 'expiration']")
-    $expirationNode.SetAttribute("maximumAge", "1")
-    $expirationNode.SetAttribute("unit", "days")
+    Write-Host "    Update ClickOnce every day"
+    $rootDeployManifestXml.assembly.deployment.subscription.update.expiration.SetAttribute("maximumAge", "1")
+    $rootDeployManifestXml.assembly.deployment.subscription.update.expiration.SetAttribute("unit", "days")
     
-    Write-Host "Saving root deployment manifest changes..."
-    $xml.Save("$rootDeployManifestPath")
+    Write-Host "Saving changes to root deployment manifest..."
+    $rootDeployManifestXml.Save("$rootDeployManifestPath")
 
     Write-Host "Copying root deployment manifest to release deployment manifest.."
     $releaseDeployManifestXml = [xml](Get-Content "$rootDeployManifestPath")
 
-    Write-Host "Altering root deployment manifest..."
-    $deploymentProviderNode = $releaseDeployManifestXml.SelectSingleNode("//*[local-name() = 'deploymentProvider']")
-    $deploymentProviderNode.SetAttribute("codebase", "$($secondDeployUrl.Replace(" ", "%20"))")
+    Write-Host "Changing deploymentProvider code base to URL relative to release folder URL..."
+    $releaseDeployManifestXml.assembly.deployment.deploymentProvider.SetAttribute("codebase", "$($releaseDeployUrl.Replace(" ", "%20"))")
 
-    Write-Host "Saving altered root deployment manifest..."
+    Write-Host "Saving changes to release deployment manifest..."
     $releaseDeployManifestXml.Save("$releaseDeployManifestPath")
 
     Write-Host "Signing root deployment manifest..."
-    mage -Sign "$rootDeployManifestPath" `
-        -CertFile $CertFile | Out-Host
+    mage -Sign "$rootDeployManifestPath" -CertFile $CertFile | Out-Host
 
     Write-Host "Signing release deployment manifest..."
-    mage -Sign "$releaseDeployManifestPath" `
-        -CertFile $CertFile | Out-Host
-
-    Write-Host "ClickOnce deployment created."
-    Write-Host "Uploading files to Amazon Web Services S3..."
+    mage -Sign "$releaseDeployManifestPath" -CertFile $CertFile | Out-Host
     
-    Write-Host "Moving to Output Folder..."
+    Write-Host "Changing current directory to OutputFolder..."
     cd $OutputFolder
     Write-Host "Current Folder: $(Get-Location)"
 
@@ -209,21 +198,16 @@ function Publish-ClickOnce {
         $relativeFilePaths.Add($relativeFilePath) | Out-Null
     }
 
-    Write-Host "Last File:"
+    # Root deployment manifest file
     $realDeployManifestPath = [System.IO.Path]::GetFullPath($rootDeployManifestPath)
     $relativeFilePath = "$($realDeployManifestPath.SubString($parentFolder.Length+1))"
     $relativeFilePaths.Add($relativeFilePath) | Out-Null
-        
-    Write-Host "Current Folder: $(Get-Location)"
- 
-    #Write-Host "Moving back to project folder..."
-    #popd
-
-    #Write-Host "Current Folder: $(Get-Location)"
     
-    Write-Host  "Saving Current Revision $revision to Revision.txt file..."
+    Write-Host "Saving just published revision $revision to Revision.txt file..."
     Set-Content -Value "$revision" -Path "$projectDir/Revision.txt" -Encoding UTF8
-    Write-Host "Done."
+    
+    Write-Host "The ClickOnce publish was successful." -ForegroundColor Green
+    Write-Host "You may need to upload the files to a web server.  See Deploy.Example.ps1"
 
     return $relativeFilePaths
 }
