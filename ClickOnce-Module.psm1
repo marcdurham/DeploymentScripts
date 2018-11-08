@@ -203,16 +203,19 @@ function Publish-ClickOnce {
     Write-Host "Copying root deployment manifest to release deployment manifest.."
     $releaseDeployManifestXml = [xml](Get-Content $rootDeployManifestPath)
 
-    Write-Host "Changing deploymentProvider code base to URL relative to release folder URL..."
-    $releaseDeployManifestXml.assembly.deployment.deploymentProvider.SetAttribute("codebase", "$($releaseDeployUrl.Replace(" ", "%20"))")
+    #Write-Host "Changing deployment.deploymentProvider code base to URL relative to release folder URL..."
+    #$releaseDeployManifestXml.assembly.deployment.deploymentProvider.SetAttribute("codebase", "$($releaseDeployUrl.Replace(" ", "%20"))")
+
+    Write-Host "Changing dependency.dependentAssembly. code base to URL relative to release folder URL..."
+    $releaseDeployManifestXml.assembly.dependency.dependentAssembly.SetAttribute("codebase", $appManifest)
 
     Write-Host "Saving changes to release deployment manifest..."
     $releaseDeployManifestXml.Save($releaseDeployManifestPath)
 
-    Write-Host "Signing root deployment manifest..." -ForegroundColor Green
+    Write-Host "Signing root deployment manifest... ($rootDeployManifestPath)" -ForegroundColor Green
     mage -Sign $rootDeployManifestPath -CertFile $CertFile | Out-Host
 
-    Write-Host "Signing release deployment manifest..." -ForegroundColor Green
+    Write-Host "Signing release deployment manifest... ($releaseDeployManifestPath)" -ForegroundColor Green
     mage -Sign $releaseDeployManifestPath -CertFile $CertFile | Out-Host
     
     Write-Host "Changing current directory to OutputFolder..."
