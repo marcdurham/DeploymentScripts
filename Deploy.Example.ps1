@@ -29,7 +29,7 @@ try {
         -AppShortName "AppName" `
         -IconFile "YourIconFile.ico" `
         -Publisher "Your Name" `
-        -OutputDir "/YourLocalClickOncePublishFolder" `
+        -OutputFolder "/YourLocalClickOncePublishFolder" `
         -CertFile "../../YourPrivateKeyFile.pfx" `
         -DeploymentRootUrl "http://downloads.domain.com/appname" `
         -FileExtension ".abc" `
