@@ -36,7 +36,7 @@ function Publish-ClickOnce {
     Write-Host "Project Folder: $ProjectFolder"
 
     Write-Host "Preparing files to be published..." -ForegroundColor Green
-    Write-Host "Changing current directory to binary release folder..."
+    Write-Host "Changing current directory to binary release folder: $BinaryReleaseFolder"
     pushd .\
     cd $BinaryReleaseFolder
 
@@ -91,7 +91,6 @@ function Publish-ClickOnce {
     $deployManifest = "$AppShortName.application"
     $signingAlgorithm = "sha256RSA"
 
-    $OutputFolder = (Resolve-Path "$ProjectFolder/$OutputFolder")
     $releaseRelativePath = "Application Files/$AppShortName" + "_$($Version.Replace(".", "_"))"
     $releaseFolder = "$OutputFolder/$releaseRelativePath"
     
@@ -108,34 +107,31 @@ function Publish-ClickOnce {
     Write-Host "Root Deployment Manifest Path: $rootDeployManifestPath"
     Write-Host "Release Deployment Manifest Path: $releaseDeployManifestPath"
     
-    Write-Host "Checking if output folder already exists: $releaseFolder"
+    Write-Host "Checking if release output folder already exists: $releaseFolder"
     if (Get-Item $releaseFolder -ErrorAction  SilentlyContinue) {
-        Write-Host "    Output folder already exists." -ForegroundColor Red
+        Write-Host "    Release output folder already exists." -ForegroundColor Red
         if ($DeleteOutputFolder) {
-            Write-Host "    Deleting existing output folder..."
+            Write-Host "    Deleting existing release output folder..."
             Remove-Item -Recurse $releaseFolder
         } else {
-            Write-Host "    Include the (dangerous) -DeleteOutputFolder parameter to automatically delete an existing output folder with the same name." -ForegroundColor Yellow
+            Write-Host "    Include the (dangerous) -DeleteOutputFolder parameter to automatically delete an existing release output folder with the same name." -ForegroundColor Yellow
             return
         }
     } else {
-         Write-Host "    Output folder does not already exist.  Continue."
+         Write-Host "    Release output folder does not already exist.  Continue."
     }
 
-    if (-Not (Test-Path $OutputFolder)) {
-        Write-Host "Creating output folder: $OutputFolder" -ForegroundColor Yellow
-        New-Item $OutputFolder -ItemType directory | Out-Null
-    }
-
-    Write-Host "Creating release folder: $releaseFolder"
+    Write-Host "Creating release output folder: $releaseFolder"
     New-Item $releaseFolder -ItemType directory | Out-Null
  
-    Write-Host "Copying files into the release folder..."
+    Write-Host "Copying files into the release output folder: $releaseFolder"
+	foreach ($f in $Files) {
+	    Write-Host "    $f"
+	}
+	
     Copy-Item $Files -Destination $releaseFolder
     
-    # Creating and signing app manifest file
-    Write-Host "Creating and signing app manifest file..." -ForegroundColor Green
-    Write-Host "Generating application manifest file: $appManifestPath"
+    Write-Host "Generating app manifest file: $appManifestPath" -ForegroundColor Green
     mage -New Application `
         -ToFile $appManifestPath `
         -Name $AppLongName `
